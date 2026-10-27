@@ -1,3 +1,204 @@
-<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>本月生花｜投稿審核</title><link rel="stylesheet" href="style.css"></head><body><main class="wrap" style="padding:36px 0"><h1>花友投稿審核</h1><p>僅供管理者使用。請勿分享管理金鑰或將金鑰寫入前端程式。</p><label>管理 API 金鑰（只在本頁暫時使用） <input id="token" type="password" autocomplete="off" style="padding:12px;width:min(400px,100%)"></label><button class="btn" id="load">載入待審投稿</button><p id="status"></p><div id="pending" class="postgrid"></div></main><script>
-const $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));async function request(method,body){let r=await fetch('/api/admin',{method,headers:{Authorization:'Bearer '+$('token').value,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});let j=await r.json();if(!r.ok)throw Error(j.error);return j}async function load(){try{let j=await request('GET');$('status').textContent=`待審 ${j.posts.length} 篇`;$('pending').innerHTML=j.posts.map(p=>`<article class="postcard"><img src="${esc(p.image_url)}" alt="待審照片"><div class="postbody"><h3>${esc(p.flower)}</h3><p>${esc(p.month)}月・${esc(p.place)}・${esc(p.nickname)}</p><p>${esc(p.story)}</p><button class="btn" data-id="${esc(p.id)}" data-action="approve">核准</button> <button class="btn light" data-id="${esc(p.id)}" data-action="reject">拒絕</button></div></article>`).join('');$('pending').querySelectorAll('[data-action]').forEach(b=>b.onclick=async()=>{if(!confirm('確定'+(b.dataset.action==='approve'?'核准':'拒絕')+'此貼文？'))return;try{await request('POST',{id:b.dataset.id,action:b.dataset.action});load()}catch(e){$('status').textContent=e.message}})}catch(e){$('status').textContent=e.message}}$('load').onclick=load;
-</script></body></html>
+
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>本月生花｜投稿審核</title>
+  <link rel="stylesheet" href="style.css">
+
+  <style>
+    .admin-controls {
+      display: flex;
+      align-items: flex-end;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin: 24px 0;
+    }
+
+    .admin-controls label {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .admin-controls input {
+      box-sizing: border-box;
+      padding: 12px;
+      width: min(400px, 100%);
+      min-width: 220px;
+    }
+
+    .admin-controls .btn {
+      flex-shrink: 0;
+    }
+
+    #status {
+      margin: 20px 0;
+    }
+
+    @media (max-width: 640px) {
+      .admin-controls {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 16px;
+      }
+
+      .admin-controls label {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+      }
+
+      .admin-controls input {
+        width: 100%;
+        min-width: 0;
+      }
+
+      .admin-controls .btn {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <main class="wrap" style="padding:36px 0">
+    <h1>花友投稿審核</h1>
+
+    <p>
+      僅供管理者使用。請勿分享管理金鑰或將金鑰寫入前端程式。
+    </p>
+
+    <div class="admin-controls">
+      <label for="token">
+        請輸入金鑰
+        <input
+          id="token"
+          type="password"
+          autocomplete="off"
+        >
+      </label>
+
+      <button class="btn" id="load" type="button">
+        載入待審投稿
+      </button>
+    </div>
+
+    <p id="status" aria-live="polite"></p>
+
+    <div id="pending" class="postgrid"></div>
+  </main>
+
+  <script>
+    const $ = id => document.getElementById(id);
+
+    const esc = s => String(s ?? '').replace(
+      /[&<>"']/g,
+      c => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      }[c])
+    );
+
+    async function request(method, body) {
+      const r = await fetch('/api/admin', {
+        method,
+        headers: {
+          Authorization: 'Bearer ' + $('token').value,
+          'Content-Type': 'application/json'
+        },
+        body: body ? JSON.stringify(body) : undefined
+      });
+
+      const j = await r.json();
+
+      if (!r.ok) {
+        throw Error(j.error || '操作失敗');
+      }
+
+      return j;
+    }
+
+    async function load() {
+      try {
+        const j = await request('GET');
+
+        $('status').textContent = `待審 ${j.posts.length} 篇`;
+
+        $('pending').innerHTML = j.posts.map(p => `
+          <article class="postcard">
+            <img
+              src="${esc(p.image_url)}"
+              alt="待審照片"
+            >
+
+            <div class="postbody">
+              <h3>${esc(p.flower)}</h3>
+
+              <p>
+                ${esc(p.month)}月・${esc(p.place)}・${esc(p.nickname)}
+              </p>
+
+              <p>${esc(p.story)}</p>
+
+              <button
+                class="btn"
+                data-id="${esc(p.id)}"
+                data-action="approve"
+                type="button"
+              >
+                核准
+              </button>
+
+              <button
+                class="btn light"
+                data-id="${esc(p.id)}"
+                data-action="reject"
+                type="button"
+              >
+                拒絕
+              </button>
+            </div>
+          </article>
+        `).join('');
+
+        $('pending')
+          .querySelectorAll('[data-action]')
+          .forEach(b => {
+            b.onclick = async () => {
+              const actionText =
+                b.dataset.action === 'approve'
+                  ? '核准'
+                  : '拒絕';
+
+              if (!confirm(`確定${actionText}此貼文？`)) {
+                return;
+              }
+
+              try {
+                await request('POST', {
+                  id: b.dataset.id,
+                  action: b.dataset.action
+                });
+
+                await load();
+              } catch (e) {
+                $('status').textContent = e.message;
+              }
+            };
+          });
+
+      } catch (e) {
+        $('status').textContent = e.message;
+      }
+    }
+
+    $('load').onclick = load;
+  </script>
+</body>
+</html>
