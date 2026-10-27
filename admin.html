@@ -8,6 +8,10 @@
   <link rel="stylesheet" href="style.css">
 
   <style>
+    .admin-wrap {
+      padding: 36px 0 80px;
+    }
+
     .admin-controls {
       display: flex;
       align-items: flex-end;
@@ -18,8 +22,8 @@
 
     .admin-controls label {
       display: flex;
-      align-items: center;
       flex-wrap: wrap;
+      align-items: center;
       gap: 12px;
     }
 
@@ -30,63 +34,193 @@
       min-width: 220px;
     }
 
-    .admin-controls .btn {
-      flex-shrink: 0;
+    .admin-tabs {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 30px 0 24px;
+      border-bottom: 1px solid #d9ded5;
+      padding-bottom: 14px;
+    }
+
+    .admin-tab {
+      border: 1px solid #d5dfd5;
+      background: transparent;
+      color: #345c4a;
+      border-radius: 30px;
+      padding: 12px 22px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    .admin-tab.active {
+      background: #345c4a;
+      border-color: #345c4a;
+      color: white;
+    }
+
+    .admin-count {
+      display: inline-block;
+      margin-left: 6px;
+      opacity: .8;
+    }
+
+    .admin-section-title {
+      margin: 12px 0 24px;
+      color: #345c4a;
+    }
+
+    .admin-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .admin-action {
+      border: 1px solid #345c4a;
+      background: #345c4a;
+      color: white;
+      border-radius: 24px;
+      padding: 10px 18px;
+      cursor: pointer;
+      font-size: 15px;
+    }
+
+    .admin-action.secondary {
+      background: transparent;
+      color: #345c4a;
+    }
+
+    .admin-action.danger {
+      background: #fff4f0;
+      border-color: #b66c60;
+      color: #9d5147;
+    }
+
+    .admin-action:disabled {
+      opacity: .5;
+      cursor: wait;
+    }
+
+    .admin-empty {
+      padding: 44px 24px;
+      border: 1px dashed #d5dfd5;
+      border-radius: 20px;
+      text-align: center;
+      color: #65736b;
+    }
+
+    .admin-card-image {
+      width: 100%;
+      height: 240px;
+      object-fit: cover;
+      display: block;
+    }
+
+    .admin-date {
+      font-size: 13px;
+      color: #7d877f;
     }
 
     #status {
-      margin: 20px 0;
+      margin: 18px 0;
     }
 
     @media (max-width: 640px) {
       .admin-controls {
         flex-direction: column;
         align-items: stretch;
-        gap: 16px;
       }
 
       .admin-controls label {
         flex-direction: column;
         align-items: stretch;
-        gap: 8px;
       }
 
-      .admin-controls input {
+      .admin-controls input,
+      .admin-controls .btn {
         width: 100%;
         min-width: 0;
       }
 
-      .admin-controls .btn {
-        width: 100%;
+      .admin-tabs {
+        gap: 8px;
+      }
+
+      .admin-tab {
+        padding: 10px 14px;
+        font-size: 14px;
       }
     }
   </style>
 </head>
 
 <body>
-  <main class="wrap" style="padding:36px 0">
+  <main class="wrap admin-wrap">
     <h1>花友投稿審核</h1>
 
     <p>
-      僅供管理者使用。請勿分享管理金鑰或將金鑰寫入前端程式。
+      管理花友旅行日記，審核投稿與調整公開狀態。
+      請勿分享管理金鑰。
     </p>
 
     <div class="admin-controls">
       <label for="token">
-        請輸入金鑰
+        金鑰
         <input
           id="token"
           type="password"
           autocomplete="off"
+          placeholder="輸入管理金鑰"
         >
       </label>
 
       <button class="btn" id="load" type="button">
-        載入待審投稿
+        載入投稿
       </button>
     </div>
 
     <p id="status" aria-live="polite"></p>
+
+    <div class="admin-tabs" role="tablist" aria-label="投稿審核分類">
+      <button
+        class="admin-tab active"
+        data-tab="pending"
+        type="button"
+        role="tab"
+        aria-selected="true"
+      >
+        待審投稿
+        <span class="admin-count" id="count-pending">0</span>
+      </button>
+
+      <button
+        class="admin-tab"
+        data-tab="approved"
+        type="button"
+        role="tab"
+        aria-selected="false"
+      >
+        已審查
+        <span class="admin-count" id="count-approved">0</span>
+      </button>
+
+      <button
+        class="admin-tab"
+        data-tab="rejected"
+        type="button"
+        role="tab"
+        aria-selected="false"
+      >
+        未通過
+        <span class="admin-count" id="count-rejected">0</span>
+      </button>
+    </div>
+
+    <h2 class="admin-section-title" id="section-title">
+      待審投稿
+    </h2>
 
     <div id="pending" class="postgrid"></div>
   </main>
@@ -105,8 +239,18 @@
       }[c])
     );
 
+    const labels = {
+      pending: '待審投稿',
+      approved: '已審查',
+      rejected: '未通過'
+    };
+
+    let allPosts = [];
+    let currentTab = 'pending';
+    let loaded = false;
+
     async function request(method, body) {
-      const r = await fetch('/api/admin', {
+      const response = await fetch('/api/admin', {
         method,
         headers: {
           Authorization: 'Bearer ' + $('token').value,
@@ -115,90 +259,192 @@
         body: body ? JSON.stringify(body) : undefined
       });
 
-      const j = await r.json();
+      const result = await response.json();
 
-      if (!r.ok) {
-        throw Error(j.error || '操作失敗');
+      if (!response.ok) {
+        throw new Error(result.error || '操作失敗');
       }
 
-      return j;
+      return result;
+    }
+
+    function updateCounts() {
+      Object.keys(labels).forEach(status => {
+        $('count-' + status).textContent =
+          allPosts.filter(p => p.status === status).length;
+      });
+    }
+
+    function actionButtons(post) {
+      if (post.status === 'pending') {
+        return `
+          <button class="admin-action"
+            data-id="${esc(post.id)}"
+            data-action="approve">
+            核准公開
+          </button>
+          <button class="admin-action danger"
+            data-id="${esc(post.id)}"
+            data-action="reject">
+            未通過
+          </button>
+        `;
+      }
+
+      if (post.status === 'approved') {
+        return `
+          <button class="admin-action danger"
+            data-id="${esc(post.id)}"
+            data-action="reject">
+            改為未通過
+          </button>
+          <button class="admin-action secondary"
+            data-id="${esc(post.id)}"
+            data-action="pending">
+            重新待審
+          </button>
+        `;
+      }
+
+      return `
+        <button class="admin-action"
+          data-id="${esc(post.id)}"
+          data-action="approve">
+          重新核准
+        </button>
+        <button class="admin-action secondary"
+          data-id="${esc(post.id)}"
+          data-action="pending">
+          移回待審
+        </button>
+      `;
+    }
+
+    function render() {
+      $('section-title').textContent = labels[currentTab];
+
+      document.querySelectorAll('.admin-tab').forEach(tab => {
+        const active = tab.dataset.tab === currentTab;
+        tab.classList.toggle('active', active);
+        tab.setAttribute('aria-selected', String(active));
+      });
+
+      updateCounts();
+
+      const posts = allPosts.filter(
+        p => p.status === currentTab
+      );
+
+      if (!loaded) {
+        $('pending').innerHTML = `
+          <div class="admin-empty">
+            請先輸入管理金鑰，並點擊「載入投稿」。
+          </div>
+        `;
+        return;
+      }
+
+      if (!posts.length) {
+        $('pending').innerHTML = `
+          <div class="admin-empty">
+            目前沒有${labels[currentTab]}。
+          </div>
+        `;
+        return;
+      }
+
+      $('pending').innerHTML = posts.map(p => `
+        <article class="postcard">
+          ${
+            p.image_url
+              ? `<img
+                   class="admin-card-image"
+                   src="${esc(p.image_url)}"
+                   alt="花友投稿照片"
+                 >`
+              : ''
+          }
+
+          <div class="postbody">
+            <h3>${esc(p.flower)}</h3>
+
+            <p>
+              ${esc(p.month)}月・${esc(p.place)}
+              ・${esc(p.nickname)}
+            </p>
+
+            <p>${esc(p.story)}</p>
+
+            <p class="admin-date">
+              投稿時間：
+              ${
+                p.created_at
+                  ? esc(new Date(p.created_at).toLocaleString('zh-TW'))
+                  : '未提供'
+              }
+            </p>
+
+            <div class="admin-actions">
+              ${actionButtons(p)}
+            </div>
+          </div>
+        </article>
+      `).join('');
+
+      document.querySelectorAll('[data-action]').forEach(button => {
+        button.addEventListener('click', async () => {
+          const id = button.dataset.id;
+          const action = button.dataset.action;
+
+          const messages = {
+            approve: '確定要核准並公開這篇投稿嗎？',
+            reject: '確定要將這篇投稿改為未通過嗎？',
+            pending: '確定要將這篇投稿移回待審嗎？'
+          };
+
+          if (!confirm(messages[action])) return;
+
+          button.disabled = true;
+
+          try {
+            await request('POST', { id, action });
+            await load();
+          } catch (e) {
+            $('status').textContent = e.message;
+            button.disabled = false;
+          }
+        });
+      });
     }
 
     async function load() {
+      $('status').textContent = '正在載入投稿…';
+
       try {
-        const j = await request('GET');
+        const result = await request('GET');
 
-        $('status').textContent = `待審 ${j.posts.length} 篇`;
+        allPosts = result.posts || [];
+        loaded = true;
 
-        $('pending').innerHTML = j.posts.map(p => `
-          <article class="postcard">
-            <img
-              src="${esc(p.image_url)}"
-              alt="待審照片"
-            >
+        $('status').textContent =
+          `已載入 ${allPosts.length} 篇投稿`;
 
-            <div class="postbody">
-              <h3>${esc(p.flower)}</h3>
-
-              <p>
-                ${esc(p.month)}月・${esc(p.place)}・${esc(p.nickname)}
-              </p>
-
-              <p>${esc(p.story)}</p>
-
-              <button
-                class="btn"
-                data-id="${esc(p.id)}"
-                data-action="approve"
-                type="button"
-              >
-                核准
-              </button>
-
-              <button
-                class="btn light"
-                data-id="${esc(p.id)}"
-                data-action="reject"
-                type="button"
-              >
-                拒絕
-              </button>
-            </div>
-          </article>
-        `).join('');
-
-        $('pending')
-          .querySelectorAll('[data-action]')
-          .forEach(b => {
-            b.onclick = async () => {
-              const actionText =
-                b.dataset.action === 'approve'
-                  ? '核准'
-                  : '拒絕';
-
-              if (!confirm(`確定${actionText}此貼文？`)) {
-                return;
-              }
-
-              try {
-                await request('POST', {
-                  id: b.dataset.id,
-                  action: b.dataset.action
-                });
-
-                await load();
-              } catch (e) {
-                $('status').textContent = e.message;
-              }
-            };
-          });
-
+        render();
       } catch (e) {
         $('status').textContent = e.message;
       }
     }
 
-    $('load').onclick = load;
+    document.querySelectorAll('[data-tab]').forEach(tab => {
+      tab.addEventListener('click', () => {
+        currentTab = tab.dataset.tab;
+        render();
+      });
+    });
+
+    $('load').addEventListener('click', load);
+
+    render();
   </script>
 </body>
 </html>
